@@ -1,0 +1,4 @@
+# Every change needs a review from a code owner (enforced by branch protection).
+*                     @RealElbek
+/.github/             @RealElbek
+/docker-compose.yml   @RealElbek

@@ -1,125 +1,117 @@
-# EP10 — Real-World Docker Stack (Flask + Postgres + Nginx + cAdvisor)
+# Ticket Booking Platform — DevOps project
 
-DevOps exam task based on
-[docker-home-lab-series / EP10-Real-world](https://github.com/learnwithdevopsengineer3682/docker-home-lab-series/tree/main/EP10-Real-world).
+PDP University · Unit 4 DevOps · PayFast · Topic 1: **Chipta bron qilish**
+(event, seat, booking, payment, ticket)
 
-A small **production-like** stack orchestrated with Docker Compose:
-
-```
-              :80                         backend network (private)
- browser ───► nginx ──── reverse proxy ───► app (Flask + Gunicorn) ───► db (Postgres 14)
-                                                                         │
-                                                                   dbdata volume
- browser ───► cadvisor :8080   (CPU / memory / network of every container)
-```
-
-| Service    | Image                         | What it does                                              |
-| ---------- | ----------------------------- | --------------------------------------------------------- |
-| `nginx`    | `nginx:1.27-alpine`           | Only public entry point (port 80), proxies to Flask        |
-| `app`      | built from `flask-app/`       | Flask app, runs as non-root, served by Gunicorn            |
-| `db`       | `postgres:14-alpine`          | Database; data kept in the named volume `dbdata`           |
-| `cadvisor` | `gcr.io/cadvisor/cadvisor`    | Container monitoring UI on port 8080                       |
-
-## Files
+A REST API to sell event tickets **without ever selling the same seat twice**, packaged as a
+production-like Docker stack: Nginx → Flask/Gunicorn (scalable) → PostgreSQL, monitored by cAdvisor,
+tested in CI.
 
 ```
-docker-compose.yml   4 services, healthchecks, restart policies, 2 networks, 1 volume
-nginx.conf           reverse proxy config (Lab 1)
-flask-app/
-  app.py             /  -> stores a visit in Postgres and returns the count
-                     /health -> 200 only if DB is reachable (used by healthcheck)
-  Dockerfile         python:3.12-slim, non-root user, HEALTHCHECK, gunicorn
-  requirements.txt   pinned versions
-.env.example         DB credentials template (real .env is git-ignored)
-.github/workflows/ci.yml   GitHub Actions: starts the stack and tests it
+              :80                         backend (internal)              data (internal)
+ customer ───► nginx ── load balance ───► app × N (Flask+Gunicorn) ─────► PostgreSQL ── pgdata volume
+              rate limit, request id
+ admin ──────► cAdvisor :8080  (CPU / memory / network of every container)
 ```
 
 ## Quick start
 
-Requirements: Docker + Docker Compose v2.
+Requires Docker + Docker Compose v2.
 
 ```sh
-cp .env.example .env                       # set DB_USER, DB_PASS, DB_NAME
-docker compose up --build -d --wait        # build + start, wait until healthy
-docker compose ps                          # all 4 should be (healthy)
+git clone https://github.com/RealElbek/devops.git && cd devops
+cp .env.example .env
+docker compose up --build -d --wait      # or: make up
 ```
 
-Open:
-- App via Nginx: <http://localhost>
-- App health: <http://localhost/health>
-- cAdvisor: <http://localhost:8080>
+| URL | What |
+| --- | ---- |
+| <http://localhost> | API index |
+| <http://localhost/api/v1/events> | Events (a demo event is created on first start) |
+| <http://localhost/health> | Health (app + DB) |
+| <http://localhost:8080> | cAdvisor monitoring |
 
-Stop: `docker compose down` (data is kept) · Delete everything incl. data: `docker compose down -v`
-
----
-
-## Lab 1 — Reverse proxy
-
-`nginx` is the **only** service with a public port (`80:80`). The Flask app uses `expose: 5000`,
-so it is reachable only inside the Docker network. `nginx.conf` forwards every request to
-`http://app:5000` (Docker DNS resolves the service name `app`) and passes the real client
-headers (`X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`).
+Try a booking:
 
 ```sh
-$ curl http://localhost/
-{"message":"Hello from the EP10 real-world Docker stack!","served_by":"4c343b6a1cb1","visits":1}
+curl localhost/api/v1/events/1/seats
+curl -X POST localhost/api/v1/bookings -H 'Content-Type: application/json' \
+  -d '{"event_id":1,"seat_ids":[1,2],"customer_name":"Ali Valiyev","customer_email":"ali@example.com"}'
+curl -X POST localhost/api/v1/bookings/1/pay -H 'Content-Type: application/json' -d '{"method":"click"}'
 ```
 
-## Lab 2 — Health checks
+Stop: `make down` (keeps data) · Delete everything: `make clean` · All commands: `make help`
 
-| Service | Healthcheck                                    |
-| ------- | ---------------------------------------------- |
-| `db`    | `pg_isready -U $POSTGRES_USER -d $POSTGRES_DB` |
-| `app`   | `GET /health` → also runs `SELECT 1` on the DB |
-| `nginx` | `GET /nginx-health`                            |
+## API
 
-`depends_on` alone only controls **start order**, not readiness. Here we use
-`condition: service_healthy`, so: `db` healthy → `app` starts → `app` healthy → `nginx` starts.
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET  | `/api/v1/events` | Events with available seat counts |
+| POST | `/api/v1/events` | Create event + seat map (`rows`, `seats_per_row`, `price`) |
+| GET  | `/api/v1/events/{id}/seats` | Seat map with availability |
+| POST | `/api/v1/bookings` | Hold seats (pending, expires after `HOLD_MINUTES`) |
+| GET  | `/api/v1/bookings/{id}` | Booking with seats, payment, tickets |
+| POST | `/api/v1/bookings/{id}/pay` | Simulated payment → tickets issued |
+| POST | `/api/v1/bookings/{id}/cancel` | Cancel and release seats |
+| GET  | `/api/v1/tickets/{code}` | Check a ticket at the entrance |
+
+Details and examples: [docs/api.md](docs/api.md)
+
+## Testing
 
 ```sh
-$ docker compose ps
-NAME                IMAGE                              SERVICE    STATUS
-devops-app-1        ep10-flask-app:latest              app        Up 25 seconds (healthy)
-devops-cadvisor-1   gcr.io/cadvisor/cadvisor:v0.49.1   cadvisor   Up 30 seconds (healthy)
-devops-db-1         postgres:14-alpine                 db         Up 30 seconds (healthy)
-devops-nginx-1      nginx:1.27-alpine                  nginx      Up 19 seconds (healthy)
+make test         # ruff lint + 17 pytest tests against real PostgreSQL (separate test DB)
+make smoke        # full booking flow through nginx
+make resilience   # data persistence, scaling to 3 replicas, database outage + recovery
 ```
 
-## Lab 3 — Monitoring with cAdvisor
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs on every PR to `main`:
+**secret scan (gitleaks) → lint + tests → full stack smoke + resilience**.
+Latest results: [docs/report.md](docs/report.md)
 
-cAdvisor mounts the host's `/sys`, `/var/run`, `/var/lib/docker` (read-only) and shows live CPU,
-memory, network and filesystem usage per container at <http://localhost:8080> →
-**Docker Containers**.
+## What makes it production-like
 
-Resource usage measured on the running stack (`docker stats --no-stream`):
+- **Healthchecks** on db, app, nginx + `depends_on: service_healthy` (correct startup order)
+- **Restart policies**, **resource limits**, **log rotation**
+- **Horizontal scaling**: `docker compose up -d --scale app=3`; nginx balances automatically
+- **Self-healing**: if Postgres goes down, `/health` returns 503 and the app reconnects on its own
+- **Persistence**: named volume `pgdata`
+- **Security**: non-root, read-only container, `cap_drop: ALL`, internal networks, only nginx and
+  cAdvisor publish ports, secrets in git-ignored `.env`, gitleaks in CI, no card data (simulated payments)
+- **No double booking**: Postgres row locks + unique ticket per seat, tested with 20 parallel requests
 
-| Container | CPU    | Memory  | Notes                                        |
-| --------- | ------ | ------- | -------------------------------------------- |
-| nginx     | ~0%    | ~4 MiB  | very light, just proxies                     |
-| app       | low    | ~56 MiB | heaviest: Python + 2 Gunicorn workers        |
-| db        | ~1%    | ~19 MiB | grows with data / connections                |
-| cadvisor  | ~0.4%  | ~19 MiB | monitoring overhead is small                 |
+## Project structure
 
-If the app became a bottleneck, the next step would be more Gunicorn workers or more `app`
-replicas behind Nginx, and setting `deploy.resources.limits` per service.
-
-## Production practices used
-
-- **Restart policy** `unless-stopped` on every service — containers come back after a crash/reboot.
-- **Named volume** `dbdata` — data survives `docker compose down` (visit counter keeps growing).
-- **Secrets in `.env`**, not in git; `.env.example` is the template.
-- **Non-root user** in the app image; small `slim`/`alpine` images; pinned versions.
-- **Gunicorn** instead of Flask's dev server.
-- **Network isolation** — `db` and `app` live only on the `backend` network; only Nginx
-  (port 80) and cAdvisor (port 8080) are published.
-- **CI** — GitHub Actions starts the full stack, waits for healthchecks, tests the app through
-  Nginx, checks persistence after `down`/`up`, and checks cAdvisor.
-
-## Useful commands
-
-```sh
-docker compose logs -f app            # follow app logs
-docker inspect --format '{{json .State.Health}}' devops-app-1   # healthcheck details
-docker compose exec db psql -U flaskuser -d flaskdb -c 'SELECT count(*) FROM visits;'
-docker compose restart app            # restart one service
 ```
+app/
+  ticketing/          Flask app: __init__.py (routes), service.py (business rules), db.py, schema.sql
+  tests/              pytest integration tests
+  Dockerfile          multi-stage: base → test → runtime (non-root, healthcheck)
+nginx/nginx.conf      reverse proxy, load balancing, rate limit
+docker-compose.yml    db, app, nginx, cadvisor (+ tests profile), 3 networks, 1 volume
+scripts/              smoke_test.sh, resilience_test.sh
+docs/                 architecture, api, deployment, decisions, report, team docs
+.github/              CI, Dependabot, PR + issue templates, CODEOWNERS
+Makefile              short commands
+```
+
+## Team & process
+
+| Role | Document |
+| ---- | -------- |
+| Tech Lead | [access.md](docs/access.md) (collaborators, `main` protection), [CODEOWNERS](.github/CODEOWNERS) |
+| Product Owner / Scrum | Issues + Project board, [meetings.md](docs/meetings.md) |
+| QA & Code Review | [PR template](.github/pull_request_template.md), [review-checklist.md](docs/review-checklist.md), `app/tests/` |
+| DevOps / Platform | [Dockerfile](app/Dockerfile), [docker-compose.yml](docker-compose.yml), [CI](.github/workflows/ci.yml), [deployment.md](docs/deployment.md) |
+| Tech Writer & Security | this README, [decisions.md](docs/decisions.md), [access.md](docs/access.md), gitleaks |
+
+Team agreement and roles: [docs/team-charter.md](docs/team-charter.md) ·
+Architecture: [docs/architecture.md](docs/architecture.md)
+
+## EP10 labs → where they are
+
+| EP10 lab | In this project |
+| -------- | --------------- |
+| Lab 1: Reverse proxy | `nginx/nginx.conf`, app port not published |
+| Lab 2: Health checks | `healthcheck:` on db / app / nginx, `docker compose ps` shows `(healthy)` |
+| Lab 3: cAdvisor | `cadvisor` service on :8080, analysis in [docs/report.md](docs/report.md) |
