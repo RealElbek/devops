@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  stack-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env from example
+        run: cp .env.example .env
+
+      - name: Validate compose file
+        run: docker compose config --quiet
+
+      - name: Start the stack (waits for all healthchecks)
+        run: docker compose up --build -d --wait --wait-timeout 180
+
+      - name: Show container health
+        run: docker compose ps
+
+      - name: Test app through Nginx
+        run: |
+          curl -fsS http://localhost/ | tee /dev/stderr | grep -q visits
+          curl -fsS http://localhost/health | grep -q '"status":"ok"'
+
+      - name: Test data persistence (down/up keeps the volume)
+        run: |
+          before=$(curl -fsS http://localhost/ | python3 -c 'import sys,json;print(json.load(sys.stdin)["visits"])')
+          docker compose down
+          docker compose up -d --wait --wait-timeout 180
+          after=$(curl -fsS http://localhost/ | python3 -c 'import sys,json;print(json.load(sys.stdin)["visits"])')
+          echo "before=$before after=$after"
+          test "$after" -gt "$before"
+
+      - name: Test cAdvisor
+        run: curl -fsS -o /dev/null http://localhost:8080/containers/
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down --volumes
