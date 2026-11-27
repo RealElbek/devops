@@ -1,5 +1,5 @@
 # Multi-stage build:  base (deps) -> test (pytest + ruff) -> runtime (small, non-root)
-FROM python:3.12-slim AS base
+FROM python:3.15-slim AS base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
