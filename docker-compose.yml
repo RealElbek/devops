@@ -1,86 +1,125 @@
-# EP10 — Real-world stack: Nginx -> Flask -> Postgres, monitored by cAdvisor
+# Ticket booking platform — production-like local stack
 #
-#   browser :80 ──> nginx ──(backend network)──> app ──> db (dbdata volume)
-#   browser :8080 ──> cadvisor (reads stats of every container)
+#   :80   ──> nginx ──(backend, internal)──> app x N ──(data, internal)──> db ──> pgdata volume
+#   :8080 ──> cadvisor (CPU / memory / network of every container)
+#
+# Start:  cp .env.example .env && docker compose up --build -d --wait
+name: ticketing
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+x-db-env: &db-env
+  DB_HOST: db
+  DB_USER: ${DB_USER:?set DB_USER in .env}
+  DB_PASS: ${DB_PASS:?set DB_PASS in .env}
 
 services:
   db:
-    image: postgres:14-alpine
+    image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_DB: ${DB_NAME:-ticketing}
     volumes:
-      - dbdata:/var/lib/postgresql/data       # data survives "docker compose down"
-    networks: [backend]
+      - pgdata:/var/lib/postgresql/data         # data survives `docker compose down`
+    networks: [data]
     restart: unless-stopped
-    # Lab 2: Postgres healthcheck
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 10s
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+    logging: *logging
 
   app:
-    build: ./flask-app
-    image: ep10-flask-app:latest
+    build:
+      context: ./app
+      target: runtime
+    image: ticketing-app:local
     environment:
-      DB_HOST: db
-      DB_USER: ${DB_USER}
-      DB_PASS: ${DB_PASS}
-      DB_NAME: ${DB_NAME}
-    expose:
-      - "5000"                                # only reachable inside Docker, not from host
-    networks: [backend]
+      <<: *db-env
+      DB_NAME: ${DB_NAME:-ticketing}
+      HOLD_MINUTES: ${HOLD_MINUTES:-10}
+      SEED_DEMO: ${SEED_DEMO:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    expose: ["5000"]                            # NOT published: only nginx can reach it
+    networks: [backend, data]
     depends_on:
-      db:
-        condition: service_healthy            # wait until Postgres is READY, not just started
+      db: { condition: service_healthy }        # wait until Postgres is ready, not just started
     restart: unless-stopped
-    # Lab 2: Flask healthcheck (/health also checks the DB connection)
+    read_only: true                             # container filesystem is read-only
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=2).status == 200 else 1)"]
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=2).status == 200 else 1)"]
       interval: 10s
       timeout: 3s
       retries: 3
-      start_period: 10s
+      start_period: 15s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+    logging: *logging
 
   nginx:
     image: nginx:1.27-alpine
     ports:
-      - "80:80"
+      - "${HTTP_PORT:-80}:80"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     networks: [frontend, backend]
     depends_on:
-      app:
-        condition: service_healthy
+      app: { condition: service_healthy }
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/nginx-health"]
       interval: 10s
       timeout: 3s
       retries: 3
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128M }
+    logging: *logging
 
-  # Lab 3: container metrics (CPU, memory, network, disk) at http://localhost:8080
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     ports:
-      - "8080:8080"
+      - "${CADVISOR_PORT:-8080}:8080"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-    devices:
-      - /dev/kmsg
-    privileged: true
+    devices: [/dev/kmsg]
+    privileged: true                            # needed to read host/container metrics
     networks: [frontend]
     restart: unless-stopped
+    logging: *logging
+
+  # Test runner (not started by `up`). Run: docker compose --profile test run --rm tests
+  tests:
+    profiles: [test]
+    build:
+      context: ./app
+      target: test
+    environment:
+      <<: *db-env
+      TEST_DB_NAME: ticketing_test              # separate database, real data is never touched
+    networks: [data]
+    depends_on:
+      db: { condition: service_healthy }
 
 networks:
   frontend: {}
-  backend: {}
+  backend: { internal: true }                   # no internet access, no host access
+  data:    { internal: true }                   # only app (and tests) can see the database
 
 volumes:
-  dbdata:
+  pgdata:
