@@ -50,6 +50,8 @@ Stop: `make down` (keeps data) · Delete everything: `make clean` · All command
 
 Backup: `make backup` (all 4 databases → `backups/<timestamp>/`) · Restore: `make restore FILE=backups/<folder>` — details in [docs/deployment.md](docs/deployment.md#backup-and-restore)
 
+Something broken? → [docs/runbook.md](docs/runbook.md) (symptom → check → fix for every common failure)
+
 ## API (all through the gateway)
 
 | Method | Path | Service |
@@ -117,7 +119,7 @@ Makefile              short commands
 | Tech Lead | [access.md](docs/access.md) (collaborators, `main` protection), [CODEOWNERS](.github/CODEOWNERS) |
 | Product Owner / Scrum | Issues + Project board, [meetings.md](docs/meetings.md) |
 | QA & Code Review | [PR template](.github/pull_request_template.md), [review-checklist.md](docs/review-checklist.md), `services/*/tests/` |
-| DevOps / Platform | [service Dockerfiles](services/), [docker-compose.yml](docker-compose.yml), [CI](.github/workflows/ci.yml), [deployment.md](docs/deployment.md) |
+| DevOps / Platform | [service Dockerfiles](services/), [docker-compose.yml](docker-compose.yml), [CI](.github/workflows/ci.yml), [deployment.md](docs/deployment.md), [runbook.md](docs/runbook.md) |
 | Tech Writer & Security | this README, [decisions.md](docs/decisions.md), [access.md](docs/access.md), gitleaks |
 
 Team agreement and roles: [docs/team-charter.md](docs/team-charter.md) ·
