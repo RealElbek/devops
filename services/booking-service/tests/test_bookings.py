@@ -98,3 +98,22 @@ def test_concurrent_bookings_only_one_wins(app):
         t.join()
     assert results.count(201) == 1
     assert results.count(409) == 19
+
+
+def test_stats_counts_bookings_and_seats(client):
+    paid = book(client, [1, 2]).json
+    client.post(f"/internal/bookings/{paid['id']}/mark-paid")
+    book(client, [3], email="h@example.com")                       # active hold
+    cancelled = book(client, [4], email="c@example.com").json
+    client.post(f"/api/v1/bookings/{cancelled['id']}/cancel")
+    old = book(client, [5], email="o@example.com").json            # hold that ran out
+    with db.transaction() as cur:
+        cur.execute(
+            "UPDATE bookings SET expires_at = now() - interval '1 minute' WHERE id = %s",
+            (old["id"],),
+        )
+    res = client.get("/api/v1/stats").json
+    assert res["bookings"] == 4
+    assert res["by_status"] == {"pending": 1, "paid": 1, "cancelled": 1, "expired": 1}
+    assert res["seats_sold"] == 2
+    assert res["seats_held"] == 1

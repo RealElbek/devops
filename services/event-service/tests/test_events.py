@@ -53,3 +53,9 @@ def test_demo_seed_runs_once_even_in_parallel(app):
     for t in threads:
         t.join()
     assert len(service.list_events()) == 1
+
+
+def test_stats(client, event):
+    res = client.get("/api/v1/stats")
+    assert res.status_code == 200
+    assert res.json == {"events": 1, "upcoming_events": 1, "seats": 10}

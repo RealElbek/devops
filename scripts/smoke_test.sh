@@ -48,4 +48,11 @@ curl -fsS "$API/tickets/$ticket" | grep -q '"event":"Smoke Test Show"' && pass "
 code=$(status -X POST "$BASE/internal/bookings/$booking_id/mark-paid")
 [ "$code" = 404 ] && pass "[gateway]         /internal/* is not reachable from outside" || fail "internal endpoint exposed ($code)"
 
+curl -fsS "$BASE/" | grep -q '<title>Ticket Booking Platform</title>' && pass "[gateway]         GET / -> dashboard page" || fail "dashboard page"
+for svc in event booking payment ticket; do
+  curl -fsS "$API/stats/$svc" | python3 -c "import sys,json; json.load(sys.stdin)" || fail "stats/$svc"
+done
+sold=$(curl -fsS "$API/stats/booking" | json 'd["seats_sold"]')
+[ "$sold" -ge 2 ] && pass "[dashboard]       GET /api/v1/stats/* from all 4 services ($sold seats sold)" || fail "stats: seats_sold=$sold"
+
 echo "Smoke test passed."

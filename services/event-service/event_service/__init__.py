@@ -29,6 +29,10 @@ def register_routes(app):
     def seats(event_id):
         return jsonify(service.list_seats(event_id))
 
+    @app.get(f"{API}/stats")
+    def stats():
+        return jsonify(service.stats())
+
     # internal: only other services call this (the gateway does not route /internal)
     @app.post("/internal/seats/lookup")
     def lookup_seats():

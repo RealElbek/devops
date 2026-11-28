@@ -28,6 +28,10 @@ def register_routes(app):
     def cancel(booking_id):
         return jsonify(service.cancel_booking(booking_id))
 
+    @app.get(f"{API}/stats")
+    def stats():
+        return jsonify(service.stats())
+
     # internal: only payment-service calls this (the gateway does not route /internal)
     @app.post("/internal/bookings/<int:booking_id>/mark-paid")
     def mark_paid(booking_id):

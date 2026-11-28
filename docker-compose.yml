@@ -161,6 +161,7 @@ services:
       - "${HTTP_PORT:-80}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./web:/usr/share/nginx/html:ro           # dashboard page (index.html + static/)
     networks: [frontend, backend]
     depends_on:
       event-service:   { condition: service_healthy }

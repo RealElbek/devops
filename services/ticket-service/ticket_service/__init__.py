@@ -13,6 +13,10 @@ API = "/api/v1"
 
 
 def register_routes(app):
+    @app.get(f"{API}/stats")
+    def stats():
+        return jsonify(service.stats())
+
     @app.get(f"{API}/tickets/<code>")
     def ticket(code):
         return jsonify(service.get_ticket(code))

@@ -51,6 +51,37 @@ def availability(event_id):
     }
 
 
+def stats():
+    """Numbers for the dashboard. An unpaid hold past its time counts as expired."""
+    with transaction() as cur:
+        cur.execute(
+            """
+            SELECT count(*) AS bookings,
+                   count(*) FILTER (WHERE status = 'pending' AND expires_at > now()) AS pending,
+                   count(*) FILTER (WHERE status = 'paid') AS paid,
+                   count(*) FILTER (WHERE status = 'cancelled') AS cancelled,
+                   count(*) FILTER (WHERE status = 'expired'
+                                     OR (status = 'pending' AND expires_at <= now())) AS expired
+            FROM bookings
+            """
+        )
+        row = cur.fetchone()
+        cur.execute(
+            """
+            SELECT count(*) FILTER (WHERE b.status = 'paid') AS seats_sold,
+                   count(*) FILTER (WHERE b.status = 'pending' AND b.expires_at > now())
+                       AS seats_held
+            FROM booking_seats bs JOIN bookings b ON b.id = bs.booking_id
+            """
+        )
+        seats = cur.fetchone()
+    return {
+        "bookings": row["bookings"],
+        "by_status": {k: row[k] for k in ("pending", "paid", "cancelled", "expired")},
+        **seats,
+    }
+
+
 def create_booking(data):
     event_id = data.get("event_id")
     seat_ids = data.get("seat_ids")

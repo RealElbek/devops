@@ -65,6 +65,23 @@ def issue_tickets(data):
         return True, _short(cur.fetchall())
 
 
+def stats():
+    """Numbers for the dashboard. No ticket codes: they are entry passes."""
+    with transaction() as cur:
+        cur.execute(
+            "SELECT count(*) AS tickets, "
+            "count(*) FILTER (WHERE issued_at >= date_trunc('day', now())) AS issued_today "
+            "FROM tickets"
+        )
+        row = cur.fetchone()
+        cur.execute(
+            "SELECT event_title AS event, count(*) AS tickets FROM tickets "
+            "GROUP BY event_title ORDER BY tickets DESC, event_title LIMIT 5"
+        )
+        row["top_events"] = cur.fetchall()
+    return row
+
+
 def get_ticket(code):
     with transaction() as cur:
         cur.execute(TICKET_SQL + " WHERE code = %s", (code.upper(),))
