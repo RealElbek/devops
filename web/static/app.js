@@ -165,5 +165,11 @@ async function refresh() {
   setText("updated", `updated ${new Date().toLocaleTimeString()}`);
 }
 
+// On narrow screens the diagram scrolls sideways: start centred, so Customer and the gateway are in view.
+const archScroll = document.querySelector(".arch-scroll");
+archScroll.scrollLeft = (archScroll.scrollWidth - archScroll.clientWidth) / 2;
+
 refresh();
 setInterval(refresh, REFRESH_MS);
+// Browsers slow down timers in background tabs: refresh at once when the tab is shown again.
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
