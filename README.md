@@ -31,7 +31,8 @@ docker compose up --build -d --wait      # or: make up
 
 | URL | What |
 | --- | ---- |
-| <http://localhost> | Gateway index (list of services) |
+| <http://localhost> | **Dashboard**: live statistics + architecture with service health |
+| <http://localhost/api> | Gateway index (list of services) |
 | <http://localhost/api/v1/events> | Events (a demo event is created on first start) |
 | <http://localhost/health/booking> | Health of one service + its DB (`event`, `booking`, `payment`, `ticket`) |
 | <http://localhost:8080> | cAdvisor monitoring |

@@ -18,6 +18,7 @@ The **Service** column says which microservice answers; you always call the gate
 | GET  | `/api/v1/payments/{booking_id}` | payment | Payment of a booking | 200 | 404 |
 | GET  | `/api/v1/tickets/{code}` | ticket | Check a ticket at the entrance | 200 | 404 |
 | GET  | `/api/v1/tickets?booking_id={id}` | ticket | Tickets of a booking | 200 | 400 |
+| GET  | `/api/v1/stats/{event\|booking\|payment\|ticket}` | that one | Numbers for the dashboard: that service's own data only (no ticket codes, no customer data) | 200 | 503 if down |
 
 Errors always look like `{"error": "seats already taken: A1"}`. `503 {"error": "event-service
 unavailable"}` means a service the request needs is down; the rest of the system keeps working.

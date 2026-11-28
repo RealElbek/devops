@@ -52,3 +52,12 @@ def test_issue_validation_and_unknown_event(client):
               "seats": [{"seat_id": 1, "label": "A1"}]},
     )
     assert res.status_code == 404
+
+
+def test_stats_has_counts_but_no_codes(client):
+    issue(client)
+    res = client.get("/api/v1/stats").json
+    assert res["tickets"] == 2
+    assert res["issued_today"] == 2
+    assert res["top_events"] == [{"event": "Test Concert", "tickets": 2}]
+    assert "TKT-" not in str(res)

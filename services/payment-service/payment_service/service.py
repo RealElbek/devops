@@ -34,6 +34,23 @@ def get_payment(booking_id):
     return payment
 
 
+def stats():
+    """Numbers for the dashboard: payments and revenue (succeeded payments only)."""
+    with transaction() as cur:
+        cur.execute(
+            "SELECT count(*) AS payments, "
+            "coalesce(sum(amount) FILTER (WHERE status = 'succeeded'), 0) AS revenue, "
+            "count(*) FILTER (WHERE status = 'failed') AS failed FROM payments"
+        )
+        row = cur.fetchone()
+        cur.execute(
+            "SELECT method, count(*) AS n FROM payments WHERE status = 'succeeded' "
+            "GROUP BY method"
+        )
+        by_method = {r["method"]: r["n"] for r in cur.fetchall()}
+    return {**row, "by_method": {m: by_method.get(m, 0) for m in PAYMENT_METHODS}}
+
+
 def pay_booking(booking_id, data):
     method = (data.get("method") or "").strip().lower()
     if method not in PAYMENT_METHODS:

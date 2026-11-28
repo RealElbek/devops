@@ -156,3 +156,17 @@ This is checked by `make resilience`: with booking-db stopped, events and ticket
 
 Every request gets an `X-Request-ID` at the gateway, and each service passes it on, so one booking
 can be followed through the logs of all services.
+
+## Dashboard
+
+<http://localhost> is a static page (`web/`) served by the gateway itself, with no extra service.
+Every 5 seconds it calls `/api/v1/stats/<service>` and `/health/<service>` for all 4 services
+through the gateway, then shows:
+
+- key numbers: revenue, tickets sold, seats on hold, bookings, events
+- bookings by status, payment methods, top events by tickets
+- the architecture with live state: a service or database box turns red when it is down, and each
+  service box shows which container (replica) answered and how long it took
+
+Each service reports only its own numbers, so when one is down only its numbers disappear and the
+rest of the page keeps working (the same fault isolation as the API).

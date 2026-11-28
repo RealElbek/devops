@@ -106,6 +106,17 @@ def lookup_seats(data):
         return cur.fetchall()
 
 
+def stats():
+    """Numbers for the dashboard: only this service's own data."""
+    with transaction() as cur:
+        cur.execute(
+            "SELECT count(*) AS events, "
+            "count(*) FILTER (WHERE starts_at > now()) AS upcoming_events, "
+            "(SELECT count(*) FROM seats) AS seats FROM events"
+        )
+        return cur.fetchone()
+
+
 def seed_demo():
     """Create one demo event on first start so the API is not empty."""
     create_event(

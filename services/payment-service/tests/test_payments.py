@@ -69,3 +69,15 @@ def test_booking_service_down_records_nothing(client, fake):
     assert payment_status(client, booking_id) == 404  # rolled back, safe to retry
     fake.booking_service_down = False
     assert pay(client, booking_id).status_code == 200
+
+
+def test_stats_revenue_only_counts_succeeded(client, fake):
+    pay(client, fake.add_booking(1), "click")                       # 200 000 UZS
+    pay(client, fake.add_booking(2, seats=("B1",)), "cash")        # 100 000 UZS
+    fake.expire_before_mark_paid = True
+    pay(client, fake.add_booking(3))                                # failed
+    res = client.get("/api/v1/stats").json
+    assert res["payments"] == 3
+    assert res["revenue"] == 300000
+    assert res["failed"] == 1
+    assert res["by_method"] == {"card": 0, "click": 1, "payme": 0, "cash": 1}

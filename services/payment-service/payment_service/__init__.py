@@ -16,6 +16,10 @@ def register_routes(app):
     def pay(booking_id):
         return jsonify(service.pay_booking(booking_id, json_body()))
 
+    @app.get(f"{API}/stats")
+    def stats():
+        return jsonify(service.stats())
+
     @app.get(f"{API}/payments/<int:booking_id>")
     def payment(booking_id):
         return jsonify(service.get_payment(booking_id))
