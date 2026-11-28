@@ -1,4 +1,34 @@
-# Every change needs a review from a code owner (enforced by branch protection).
-*                     @RealElbek
-/.github/             @RealElbek
-/docker-compose.yml   @RealElbek
+# Who is asked to review what. With "Require review from Code Owners" on `main`, one of the owners
+# of the changed files must approve. The LAST matching line wins, so every line lists the area's
+# owner AND @RealElbek: GitHub never lets authors approve their own PR, so a second owner is needed.
+# Roles: docs/team-charter.md
+
+# Default: Tech Lead + QA
+*                                   @RealElbek
+
+# DevOps / Platform: containers, CI/CD, operations scripts, gateway
+/docker-compose.yml                 @Kamtarbek @RealElbek
+/Makefile                           @Kamtarbek @RealElbek
+/services/*/Dockerfile              @Kamtarbek @RealElbek
+/.github/workflows/                 @Kamtarbek @RealElbek
+/.github/dependabot.yml             @Kamtarbek @RealElbek
+/scripts/                           @Kamtarbek @RealElbek
+/nginx/                             @Kamtarbek @RealElbek
+
+# Technical Writer & Security Champion: docs, access, decisions, secrets
+/README.md                          @MahmudovMuhammadrizo24 @RealElbek
+/docs/                              @MahmudovMuhammadrizo24 @RealElbek
+/.env.example                       @MahmudovMuhammadrizo24 @RealElbek
+
+# DevOps-owned docs (after /docs/ on purpose: the last matching line wins)
+/docs/deployment.md                 @Kamtarbek @RealElbek
+/docs/runbook.md                    @Kamtarbek @RealElbek
+
+# Product Owner / Scrum Master: planning and stand-ups
+/docs/meetings.md                   @fullcoder47 @RealElbek
+/.github/ISSUE_TEMPLATE/            @fullcoder47 @RealElbek
+
+# Tech Lead + QA: review rules themselves
+/.github/CODEOWNERS                 @RealElbek
+/.github/pull_request_template.md   @RealElbek
+/docs/review-checklist.md           @RealElbek
