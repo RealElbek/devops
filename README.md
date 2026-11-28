@@ -75,7 +75,9 @@ make resilience   # persistence, scaling one service to 3 replicas, fault isolat
 ```
 
 CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs on every PR to `main`:
-**secret scan (gitleaks) → 4 service test jobs in parallel → full stack smoke + resilience**.
+**secret scan (gitleaks) · image scan (Trivy) · 4 service test jobs in parallel → full stack smoke + resilience**.
+After a merge to `main`, if every check passed, the 4 service images are pushed to GitHub Container
+Registry (`ghcr.io/realelbek/ticketing-<service>-service`, tags `latest` and `sha-<commit>`).
 Latest results: [docs/report.md](docs/report.md)
 
 ## What makes it production-like
@@ -90,7 +92,7 @@ Latest results: [docs/report.md](docs/report.md)
 - **Restart policies**, **resource limits**, **log rotation**, **request IDs** across all services
 - **Horizontal scaling**: `docker compose up -d --scale booking-service=3`; the gateway balances automatically
 - **Security**: non-root, read-only containers, `cap_drop: ALL`, internal networks, `/internal/*`
-  endpoints not exposed, secrets in git-ignored `.env`, gitleaks in CI, no card data
+  endpoints not exposed, secrets in git-ignored `.env`, gitleaks + Trivy image scan in CI, no card data
 - **No double booking**: advisory lock per seat + unique ticket per seat, tested with 20 parallel requests
 
 ## Project structure

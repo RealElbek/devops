@@ -51,6 +51,28 @@ jobs:
       - name: All service tests passed
         run: test "${{ needs.service-tests.result }}" = success
 
+  # Security: scan every service image for known vulnerabilities (Debian packages + Python packages).
+  # Fails on HIGH/CRITICAL findings that have a fix available, so a fixable hole never reaches main.
+  image-scan:
+    name: Image scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env
+      - name: Build the 4 service images
+        run: docker compose build event-service booking-service payment-service ticket-service
+      - name: Trivy scan (fail on fixable HIGH/CRITICAL)
+        run: |
+          status=0
+          for svc in event booking payment ticket; do
+            echo "::group::ticketing-$svc-service"
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.57.1 \
+              image --no-progress --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+              "ticketing-$svc-service:local" || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
   e2e:
     name: Full stack (smoke + resilience)
     runs-on: ubuntu-latest
@@ -75,3 +97,34 @@ jobs:
         run: docker compose logs
       - if: always()
         run: docker compose down -v
+
+  # Delivery: after a merge to main, and only if every check passed, push the 4 service images
+  # to GitHub Container Registry (ghcr.io). Pull requests never publish.
+  publish:
+    name: Publish images (GHCR)
+    runs-on: ubuntu-latest
+    needs: [secret-scan, test, image-scan, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write                 # only this job may write to the registry
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env
+      - name: Log in to ghcr.io
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Build, tag and push the 4 service images
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"          # registry names must be lowercase
+          short_sha="${GITHUB_SHA::7}"
+          docker compose build event-service booking-service payment-service ticket-service
+          for svc in event booking payment ticket; do
+            image="ghcr.io/$owner/ticketing-$svc-service"
+            docker tag "ticketing-$svc-service:local" "$image:sha-$short_sha"
+            docker tag "ticketing-$svc-service:local" "$image:latest"
+            docker push "$image:sha-$short_sha"
+            docker push "$image:latest"
+            echo "pushed $image:sha-$short_sha and :latest" >> "$GITHUB_STEP_SUMMARY"
+          done
