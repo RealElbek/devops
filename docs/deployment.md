@@ -48,10 +48,27 @@ make clean         # stop and DELETE data
 ## Backup and restore
 
 ```sh
-# backup
-docker compose exec -T db pg_dump -U ticketing ticketing > backup-$(date +%F).sql
-# restore (into a running, empty stack)
-docker compose exec -T db psql -U ticketing ticketing < backup-2026-11-28.sql
+make backup                                   # -> backups/ticketing-YYYYMMDD-HHMMSS.dump
+make restore                                  # restore the newest backup (asks for 'yes')
+make restore FILE=backups/ticketing-20261128-140229.dump
+YES=1 make restore FILE=...                   # no prompt (scripts / cron)
+```
+
+- **Format**: `pg_dump -Fc` (compressed, restored with `pg_restore`). Each dump is checked with
+  `pg_restore --list` before it is kept, so a broken dump never replaces a good one.
+- **Rotation**: `make backup` keeps the newest 7 (`BACKUP_KEEP=14 make backup` to change).
+  `backups/` is git-ignored — copy dumps off the machine for real disaster recovery.
+- **Restore is safe to retry**: it first saves the current data to `backups/pre-restore-*.dump`
+  (never auto-deleted), stops the app so nothing writes, and restores in **one transaction**
+  (`--single-transaction --exit-on-error`): if anything fails, the old data is untouched. Then it
+  starts the app and waits until every container is healthy.
+- If you ran `make scale`, restore brings the app back to 1 replica; run `make scale` again.
+- Credentials are read inside the db container (`$POSTGRES_USER`), never passed on the host command line.
+
+Nightly backup with cron (Linux server):
+
+```sh
+0 3 * * * cd /opt/devops && ./scripts/backup.sh >> backups/backup.log 2>&1
 ```
 
 ## Troubleshooting

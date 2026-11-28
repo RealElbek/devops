@@ -1,4 +1,4 @@
-.PHONY: help env up down ps logs test smoke resilience scale clean config
+.PHONY: help env up down ps logs test smoke resilience scale clean config backup restore
 
 help: ## Show commands
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-11s %s\n", $$1, $$2}'
@@ -32,6 +32,12 @@ resilience: ## Persistence, scaling and DB-outage checks
 
 scale: ## Run 3 app replicas
 	docker compose up -d --scale app=3 --wait
+
+backup: ## Dump the database to backups/ (keeps the newest 7)
+	./scripts/backup.sh
+
+restore: ## Restore DB (FILE=backups/x.dump, default: latest)
+	./scripts/restore.sh $(FILE)
 
 clean: ## Stop and DELETE all data
 	docker compose --profile test down -v

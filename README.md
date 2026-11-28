@@ -42,6 +42,8 @@ curl -X POST localhost/api/v1/bookings/1/pay -H 'Content-Type: application/json'
 
 Stop: `make down` (keeps data) · Delete everything: `make clean` · All commands: `make help`
 
+Backup: `make backup` · Restore: `make restore FILE=backups/<name>.dump` — details in [docs/deployment.md](docs/deployment.md#backup-and-restore)
+
 ## API
 
 | Method | Path | Description |
