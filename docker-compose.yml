@@ -1,7 +1,13 @@
-# Ticket booking platform — production-like local stack
+# Ticket booking platform — microservices, production-like local stack
 #
-#   :80   ──> nginx ──(backend, internal)──> app x N ──(data, internal)──> db ──> pgdata volume
-#   :8080 ──> cadvisor (CPU / memory / network of every container)
+#   :80 ─► gateway (nginx) ─(backend, internal)─► event-service   ─(event-data)───► event-db
+#                                               ├► booking-service ─(booking-data)─► booking-db
+#                                               ├► payment-service ─(payment-data)─► payment-db
+#                                               └► ticket-service  ─(ticket-data)──► ticket-db
+#   :8080 ─► cadvisor (CPU / memory / network of every container)
+#
+# Each service owns its own database; it can only reach its own DB network.
+# Services talk to each other over HTTP on the backend network.
 #
 # Start:  cp .env.example .env && docker compose up --build -d --wait
 name: ticketing
@@ -10,65 +16,146 @@ x-logging: &logging
   driver: json-file
   options: { max-size: "10m", max-file: "3" }
 
-x-db-env: &db-env
-  DB_HOST: db
-  DB_USER: ${DB_USER:?set DB_USER in .env}
-  DB_PASS: ${DB_PASS:?set DB_PASS in .env}
+# Settings shared by every Postgres container
+x-postgres: &postgres
+  image: postgres:16-alpine
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+    start_period: 10s
+  deploy:
+    resources:
+      limits: { cpus: "0.5", memory: 256M }
+  logging: *logging
+
+# Settings shared by every microservice container
+x-service: &service
+  expose: ["5000"]                              # NOT published: only the gateway can reach them
+  restart: unless-stopped
+  read_only: true                               # container filesystem is read-only
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  healthcheck:
+    test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=2).status == 200 else 1)"]
+    interval: 10s
+    timeout: 3s
+    retries: 3
+    start_period: 15s
+  deploy:
+    resources:
+      limits: { cpus: "0.5", memory: 256M }
+  logging: *logging
+
+# Service URLs used for service-to-service calls (Docker DNS names)
+x-service-urls: &service-urls
+  EVENT_SERVICE_URL: http://event-service:5000
+  BOOKING_SERVICE_URL: http://booking-service:5000
+  TICKET_SERVICE_URL: http://ticket-service:5000
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
 services:
-  db:
-    image: postgres:16-alpine
+  # ---------------------------------------------------------------- databases (one per service)
+  event-db:
+    <<: *postgres
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASS}
-      POSTGRES_DB: ${DB_NAME:-ticketing}
-    volumes:
-      - pgdata:/var/lib/postgresql/data         # data survives `docker compose down`
-    networks: [data]
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
-    deploy:
-      resources:
-        limits: { cpus: "1.0", memory: 512M }
-    logging: *logging
+      POSTGRES_USER: event_svc
+      POSTGRES_PASSWORD: ${EVENT_DB_PASS:?set EVENT_DB_PASS in .env}
+      POSTGRES_DB: events
+    volumes: [event-data:/var/lib/postgresql/data]
+    networks: [event-data]
 
-  app:
-    build:
-      context: ./app
-      target: runtime
-    image: ticketing-app:local
+  booking-db:
+    <<: *postgres
     environment:
-      <<: *db-env
-      DB_NAME: ${DB_NAME:-ticketing}
-      HOLD_MINUTES: ${HOLD_MINUTES:-10}
+      POSTGRES_USER: booking_svc
+      POSTGRES_PASSWORD: ${BOOKING_DB_PASS:?set BOOKING_DB_PASS in .env}
+      POSTGRES_DB: bookings
+    volumes: [booking-data:/var/lib/postgresql/data]
+    networks: [booking-data]
+
+  payment-db:
+    <<: *postgres
+    environment:
+      POSTGRES_USER: payment_svc
+      POSTGRES_PASSWORD: ${PAYMENT_DB_PASS:?set PAYMENT_DB_PASS in .env}
+      POSTGRES_DB: payments
+    volumes: [payment-data:/var/lib/postgresql/data]
+    networks: [payment-data]
+
+  ticket-db:
+    <<: *postgres
+    environment:
+      POSTGRES_USER: ticket_svc
+      POSTGRES_PASSWORD: ${TICKET_DB_PASS:?set TICKET_DB_PASS in .env}
+      POSTGRES_DB: tickets
+    volumes: [ticket-data:/var/lib/postgresql/data]
+    networks: [ticket-data]
+
+  # ---------------------------------------------------------------- microservices
+  event-service:
+    <<: *service
+    build: { context: ./services, dockerfile: event-service/Dockerfile, target: runtime }
+    image: ticketing-event-service:local
+    environment:
+      <<: *service-urls
+      DB_HOST: event-db
+      DB_NAME: events
+      DB_USER: event_svc
+      DB_PASS: ${EVENT_DB_PASS}
       SEED_DEMO: ${SEED_DEMO:-true}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    expose: ["5000"]                            # NOT published: only nginx can reach it
-    networks: [backend, data]
+    networks: [backend, event-data]
     depends_on:
-      db: { condition: service_healthy }        # wait until Postgres is ready, not just started
-    restart: unless-stopped
-    read_only: true                             # container filesystem is read-only
-    tmpfs: [/tmp]
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    healthcheck:
-      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=2).status == 200 else 1)"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 15s
-    deploy:
-      resources:
-        limits: { cpus: "0.5", memory: 256M }
-    logging: *logging
+      event-db: { condition: service_healthy }  # wait until Postgres is ready, not just started
 
-  nginx:
+  booking-service:
+    <<: *service
+    build: { context: ./services, dockerfile: booking-service/Dockerfile, target: runtime }
+    image: ticketing-booking-service:local
+    environment:
+      <<: *service-urls
+      DB_HOST: booking-db
+      DB_NAME: bookings
+      DB_USER: booking_svc
+      DB_PASS: ${BOOKING_DB_PASS}
+      HOLD_MINUTES: ${HOLD_MINUTES:-10}
+    networks: [backend, booking-data]
+    depends_on:
+      booking-db: { condition: service_healthy }
+
+  payment-service:
+    <<: *service
+    build: { context: ./services, dockerfile: payment-service/Dockerfile, target: runtime }
+    image: ticketing-payment-service:local
+    environment:
+      <<: *service-urls
+      DB_HOST: payment-db
+      DB_NAME: payments
+      DB_USER: payment_svc
+      DB_PASS: ${PAYMENT_DB_PASS}
+    networks: [backend, payment-data]
+    depends_on:
+      payment-db: { condition: service_healthy }
+
+  ticket-service:
+    <<: *service
+    build: { context: ./services, dockerfile: ticket-service/Dockerfile, target: runtime }
+    image: ticketing-ticket-service:local
+    environment:
+      <<: *service-urls
+      DB_HOST: ticket-db
+      DB_NAME: tickets
+      DB_USER: ticket_svc
+      DB_PASS: ${TICKET_DB_PASS}
+    networks: [backend, ticket-data]
+    depends_on:
+      ticket-db: { condition: service_healthy }
+
+  # ---------------------------------------------------------------- edge + monitoring
+  gateway:
     image: nginx:1.27-alpine
     ports:
       - "${HTTP_PORT:-80}:80"
@@ -76,7 +163,10 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     networks: [frontend, backend]
     depends_on:
-      app: { condition: service_healthy }
+      event-service:   { condition: service_healthy }
+      booking-service: { condition: service_healthy }
+      payment-service: { condition: service_healthy }
+      ticket-service:  { condition: service_healthy }
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/nginx-health"]
@@ -103,23 +193,47 @@ services:
     restart: unless-stopped
     logging: *logging
 
-  # Test runner (not started by `up`). Run: docker compose --profile test run --rm tests
-  tests:
+  # ---------------------------------------------------------------- tests (profile "test" only)
+  # Each runs ruff + pytest for ONE service against a separate *_test database in its own DB.
+  # Run: make test   (or: docker compose --profile test run --rm tests-booking)
+  tests-event:
     profiles: [test]
-    build:
-      context: ./app
-      target: test
-    environment:
-      <<: *db-env
-      TEST_DB_NAME: ticketing_test              # separate database, real data is never touched
-    networks: [data]
-    depends_on:
-      db: { condition: service_healthy }
+    build: { context: ./services, dockerfile: event-service/Dockerfile, target: test }
+    environment: { DB_HOST: event-db, DB_USER: event_svc, DB_PASS: "${EVENT_DB_PASS}", TEST_DB_NAME: events_test }
+    networks: [event-data]
+    depends_on: { event-db: { condition: service_healthy } }
+
+  tests-booking:
+    profiles: [test]
+    build: { context: ./services, dockerfile: booking-service/Dockerfile, target: test }
+    environment: { DB_HOST: booking-db, DB_USER: booking_svc, DB_PASS: "${BOOKING_DB_PASS}", TEST_DB_NAME: bookings_test }
+    networks: [booking-data]
+    depends_on: { booking-db: { condition: service_healthy } }
+
+  tests-payment:
+    profiles: [test]
+    build: { context: ./services, dockerfile: payment-service/Dockerfile, target: test }
+    environment: { DB_HOST: payment-db, DB_USER: payment_svc, DB_PASS: "${PAYMENT_DB_PASS}", TEST_DB_NAME: payments_test }
+    networks: [payment-data]
+    depends_on: { payment-db: { condition: service_healthy } }
+
+  tests-ticket:
+    profiles: [test]
+    build: { context: ./services, dockerfile: ticket-service/Dockerfile, target: test }
+    environment: { DB_HOST: ticket-db, DB_USER: ticket_svc, DB_PASS: "${TICKET_DB_PASS}", TEST_DB_NAME: tickets_test }
+    networks: [ticket-data]
+    depends_on: { ticket-db: { condition: service_healthy } }
 
 networks:
   frontend: {}
-  backend: { internal: true }                   # no internet access, no host access
-  data:    { internal: true }                   # only app (and tests) can see the database
+  backend:      { internal: true }              # gateway <-> services; no internet, no host access
+  event-data:   { internal: true }              # event-service   <-> event-db only
+  booking-data: { internal: true }              # booking-service <-> booking-db only
+  payment-data: { internal: true }              # payment-service <-> payment-db only
+  ticket-data:  { internal: true }              # ticket-service  <-> ticket-db only
 
 volumes:
-  pgdata:
+  event-data:
+  booking-data:
+  payment-data:
+  ticket-data:

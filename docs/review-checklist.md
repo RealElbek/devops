@@ -9,7 +9,7 @@ you checked and why it is fine).
 - [ ] Can it break double-booking protection (seat locks, unique ticket per seat)?
 
 ## Tests
-- [ ] New behaviour has a test in `app/tests/`
+- [ ] New behaviour has a test in `services/<name>-service/tests/`
 - [ ] CI is green (secret scan, lint, tests, smoke, resilience)
 
 ## DevOps
