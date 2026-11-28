@@ -79,3 +79,17 @@ Paying touches payment-, booking- and ticket-service. Instead of a distributed t
 called twice safely, and the payment row is locked and records its status. If any service fails
 in the middle, the client retries `/pay` and the flow continues without charging or issuing twice.
 A message queue (e.g. RabbitMQ) with an outbox would be the next step for automatic retries.
+
+## ADR-013: One backup folder for all 4 databases; each database restored in its own transaction
+**Date:** 2026-11-28 · **Status:** accepted
+With a database per service (ADR-010), a backup is one folder `backups/<timestamp>/` holding
+`events.dump`, `bookings.dump`, `payments.dump`, `tickets.dump` (`pg_dump -Fc`), so the 4 dumps are
+always restored together. Every dump is checked with `pg_restore --list`, and the folder only gets
+its real name when all 4 are good. Restore checks all 4 files first, takes a safety backup, stops the
+4 services, then restores each database with `--single-transaction`. The 4 databases are separate
+Postgres servers, so the 4 restores together are **not** atomic: if one fails, the earlier ones are
+already restored. We accept this instead of a distributed transaction (too complex for this size)
+because the script stops, lists what was restored, and the safety backup brings everything back
+(tested). The dumps are also not taken at the exact same instant; for consistency, take backups when
+traffic is low (nightly cron). See [deployment.md](deployment.md#backup-and-restore) and
+[runbook.md §5–6](runbook.md#5-data-was-deleted-or-corrupted).

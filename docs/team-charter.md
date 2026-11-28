@@ -9,13 +9,14 @@
 | Role | Responsibility | Evidence in the repo | Member |
 | ---- | -------------- | -------------------- | ------ |
 | Tech Lead | Repo, collaborators, `main` protection, final merge, resolving conflicts | Branch protection, collaborators list, merged PRs | Elbek Azimjonov (@RealElbek) |
-| Product Owner / Scrum Master | Issues, labels, project board, stand-ups | Issues, Project board, [meetings.md](meetings.md) | Elbek Azimjonov |
-| QA & Code Review Lead | PR template, review checklist, tests | [.github/pull_request_template.md](../.github/pull_request_template.md), [review-checklist.md](review-checklist.md), `services/*/tests/` | Elbek Azimjonov |
-| DevOps / Platform Engineer | Docker, Compose, CI/CD, "clone → one command → works" | `services/*/Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml` | Elbek Azimjonov |
-| Technical Writer & Security Champion | Docs, access list, decisions, secret checks | README, [access.md](access.md), [decisions.md](decisions.md), gitleaks job | Elbek Azimjonov |
+| Product Owner / Scrum Master | Issues, labels, project board, stand-ups | Issues, Project board, [meetings.md](meetings.md) | @fullcoder47 |
+| QA & Code Review Lead | PR template, review checklist, tests | [.github/pull_request_template.md](../.github/pull_request_template.md), [review-checklist.md](review-checklist.md), `services/*/tests/` | Elbek Azimjonov (@RealElbek), together with Tech Lead |
+| DevOps / Platform Engineer | Docker, Compose, CI/CD, "clone → one command → works" | `services/*/Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml` | Kamtarbek Shonazarov (@Kamtarbek) |
+| Technical Writer & Security Champion | Docs, access list, decisions, secret checks | README, [access.md](access.md), [decisions.md](decisions.md), gitleaks job | @MahmudovMuhammadrizo24 |
 
-> Other team members did not take part, so all roles are currently held by the Tech Lead.
-> When a member joins, they take a role from this table and it is updated in a PR.
+> Roles assigned 2026-11-28. Nobody took QA, so the Tech Lead holds it. Reviews of the Tech
+> Lead's own PRs are done by another member (a PR author never approves their own PR).
+> Any change to this table is made in a PR.
 
 ## How we work
 
