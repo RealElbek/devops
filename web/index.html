@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Ticket Booking Platform</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f46e5'/%3E%3Cpath d='M8 11h16v3a2 2 0 0 0 0 4v3H8v-3a2 2 0 0 0 0-4z' fill='white'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -48,6 +49,8 @@
 
   <section class="panel arch">
     <h2>Architecture <span class="muted small">live: each box turns red when that part is down</span></h2>
+    <p class="muted small arch-hint">← swipe to see all 4 services →</p>
+    <div class="arch-scroll">
     <svg viewBox="0 0 960 400" role="img" aria-label="Gateway in front of 4 microservices, each with its own database">
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -113,6 +116,7 @@
       <g class="node" id="d-payment"><rect x="520" y="330" width="160" height="50" rx="8"/><text x="600" y="351" class="name">payment-db</text><text x="600" y="369" class="sub state">PostgreSQL</text></g>
       <g class="node" id="d-ticket"><rect x="760" y="330" width="160" height="50" rx="8"/><text x="840" y="351" class="name">ticket-db</text><text x="840" y="369" class="sub state">PostgreSQL</text></g>
     </svg>
+    </div>
     <p class="muted small">Each service can only reach its own database (separate internal networks).
       The code under "healthy" is the container that answered: run <code>make scale</code> and booking-service will change between 3 of them.</p>
   </section>
