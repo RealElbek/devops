@@ -122,6 +122,8 @@ Nightly backup with cron (Linux server):
 
 ## Troubleshooting
 
+Quick table below; step-by-step fixes for every failure are in the [runbook](runbook.md).
+
 | Symptom | Check | Fix |
 | ------- | ----- | --- |
 | `make up` hangs on a service | `docker compose logs booking-service` | DB password wrong in `.env`; `make clean` if you changed it after first start |
