@@ -32,7 +32,7 @@ New team members get **Write**, never Admin.
 
 | Component | Who can reach it |
 | --------- | ---------------- |
-| nginx :80 | anyone who can reach the host |
+| gateway (nginx) :80 | anyone who can reach the host; only `/api/v1/*` and `/health/*` are routed |
 | cAdvisor :8080 | anyone who can reach the host — on a real server bind to `127.0.0.1` or put behind auth |
-| app :5000 | only nginx (internal `backend` network) |
-| Postgres :5432 | only the app (internal `data` network), not published to the host |
+| the 4 services :5000 | only the gateway and each other (internal `backend` network); `/internal/*` only service-to-service |
+| each Postgres :5432 | only its own service (its own internal `*-data` network), not published to the host |

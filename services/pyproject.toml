@@ -1,3 +1,4 @@
+# Shared lint + test settings, copied into every service's test image.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = [".", "tests"]
@@ -10,4 +11,6 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["ticketing", "conftest"]
+known-first-party = [
+  "common", "event_service", "booking_service", "payment_service", "ticket_service", "conftest",
+]
