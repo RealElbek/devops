@@ -38,10 +38,10 @@ resilience: ## Persistence, scaling and fault-isolation checks
 scale: ## Run 3 booking-service replicas
 	docker compose up -d --scale booking-service=3 --wait
 
-backup: ## Dump the database to backups/ (keeps the newest 7)
+backup: ## Dump all 4 databases to backups/<timestamp>/ (keeps newest 7)
 	./scripts/backup.sh
 
-restore: ## Restore DB (FILE=backups/x.dump, default: latest)
+restore: ## Restore all 4 DBs (FILE=backups/<folder>, default: latest)
 	./scripts/restore.sh $(FILE)
 
 clean: ## Stop and DELETE all data

@@ -47,7 +47,7 @@ curl -X POST localhost/api/v1/bookings/1/pay -H 'Content-Type: application/json'
 
 Stop: `make down` (keeps data) · Delete everything: `make clean` · All commands: `make help`
 
-Backup / restore: see [docs/deployment.md](docs/deployment.md#backup-and-restore) (being updated for one database per service)
+Backup: `make backup` (all 4 databases → `backups/<timestamp>/`) · Restore: `make restore FILE=backups/<folder>` — details in [docs/deployment.md](docs/deployment.md#backup-and-restore)
 
 ## API (all through the gateway)
 
@@ -103,7 +103,7 @@ services/
   ticket-service/     tickets, entrance check     (ticket_service/, tests/, Dockerfile)
 nginx/nginx.conf      API gateway: routing per service, rate limit, request id
 docker-compose.yml    4 services + 4 databases + gateway + cadvisor (+ tests profile)
-scripts/              smoke_test.sh, resilience_test.sh, backup.sh, restore.sh
+scripts/              smoke_test.sh, resilience_test.sh, backup.sh, restore.sh, db_lib.sh
 docs/                 architecture, api, deployment, decisions, report, team docs
 .github/              CI, Dependabot, PR + issue templates, CODEOWNERS
 Makefile              short commands
