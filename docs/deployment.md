@@ -48,7 +48,26 @@ make clean         # stop and DELETE data
 | Log rotation (10 MB × 3 files) | `x-logging` |
 | Rate limiting (20 r/s per IP, burst 40) | nginx |
 | Secrets only in `.env` (git-ignored) + gitleaks in CI | `.gitignore`, `ci.yml` |
+| Image scan: CI fails on fixable HIGH/CRITICAL vulnerabilities (OS + Python packages) | `ci.yml` job "Image scan (Trivy)" |
+| OS security updates on top of the base image (`apt-get upgrade`) | each service `Dockerfile` |
 | Pinned image and package versions, Dependabot | each service's Dockerfile + requirements, `.github/dependabot.yml` |
+
+## Images on GitHub Container Registry
+
+After every merge to `main` that passes all checks, CI job **Publish images (GHCR)** pushes:
+
+```
+ghcr.io/realelbek/ticketing-event-service     :latest  :sha-<7-char commit>
+ghcr.io/realelbek/ticketing-booking-service   :latest  :sha-<7-char commit>
+ghcr.io/realelbek/ticketing-payment-service   :latest  :sha-<7-char commit>
+ghcr.io/realelbek/ticketing-ticket-service    :latest  :sha-<7-char commit>
+```
+
+- Use the `sha-…` tag to deploy or roll back to an exact, tested commit; `latest` = newest `main`.
+- Only the publish job has `packages: write`; pull requests never publish.
+- Images are linked to this repo by the `org.opencontainers.image.source` label in each Dockerfile.
+- Pull: `docker pull ghcr.io/realelbek/ticketing-booking-service:latest` (log in with
+  `docker login ghcr.io` first if the package is private).
 
 ## Backup and restore
 

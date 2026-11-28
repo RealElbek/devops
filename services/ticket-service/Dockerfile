@@ -5,6 +5,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
+# OS security fixes released after the python base image was built (Trivy fails CI on fixable HIGH/CRITICAL)
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
 WORKDIR /srv
 COPY ticket-service/requirements.txt .
 RUN pip install -r requirements.txt
